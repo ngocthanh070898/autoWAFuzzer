@@ -7,9 +7,11 @@ from keras.models import load_model
 from sentence_transformers import SentenceTransformer
 import argparse
 import pickle
+import datetime
 import chromadb
-from chromadb.config import Settings
+# from chromadb.config import Settings
 import random
+from tqdm import tqdm
 
 X_FEATURES = 5
 BATCH_SIZE = 100000
@@ -108,7 +110,6 @@ def compute_score(payload):
         return None
 
 
-
 # --- Load SQLi Payloads from CSV ---
 file_path = "new-sqli.txt"
 df = pd.read_csv(file_path, names=["payloads"], nrows=1000, on_bad_lines="skip")
@@ -116,22 +117,22 @@ payloads = df["payloads"].tolist()
 print(f"Loaded {len(payloads)} SQLi payloads.")
 
 # --- Define Random Metadata Options ---
-attack_types = ["Authentication Bypass", "Data Extraction", "Enumeration", "Destructive Attack"]
-target_wafs = ["ModSecurity", "Cloudflare", "AWS WAF", "Imperva", "Akamai"]
-sources = ["Attack Grammar", "Online Source", "Manual", "Exploit DB"]
-timestamps = ["2025-03-04", "2025-03-03", "2025-03-02", "2025-03-01", "2025-02-28"]
+# attack_types = ["Authentication Bypass", "Data Extraction", "Enumeration", "Destructive Attack"]
+# target_wafs = ["ModSecurity", "Cloudflare", "AWS WAF", "Imperva", "Akamai"]
+# sources = ["Attack Grammar", "Online Source", "Manual", "Exploit DB"]
+# timestamps = ["2025-03-04", "2025-03-03", "2025-03-02", "2025-03-01", "2025-02-28"]
 
 # --- Build Metadata Dictionary (including computed score) ---
 metadata_dict = {}
-for i, payload in enumerate(payloads):
+for i, payload in enumerate(tqdm(payloads, desc="Processing payloads")):
     score = compute_score(payload)
+    current_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     metadata_dict[i] = {
         "payload": payload,
         "score": score,
-        "attack_type": random.choice(attack_types),
-        "target_waf": random.choice(target_wafs),
-        "source": random.choice(sources),
-        "timestamp": random.choice(timestamps)
+        "target_waf": "WAF-Brain",
+        "source": "Attack Grammar",
+        "timestamp": current_timestamp
     }
 
 # --- Load SentenceTransformer for Embeddings ---
@@ -144,9 +145,9 @@ print(f"Generated {embeddings.shape[0]} embeddings with dimension {embeddings.sh
 #     chroma_db_impl="duckdb+parquet",    # using DuckDB + Parquet as persistent backend
 #     persist_directory="testchromaDB/chroma_db" # adjust this path as needed
 # ))
-client = chromadb.PersistentClient(path="./testchromaDB")
+client = chromadb.PersistentClient(path="./vectorDB")
 
-collection_name = "payloads"
+collection_name = "sqli-payloads"
 try:
     collection = client.get_or_create_collection(name=collection_name)
     print(f"Loaded existing collection '{collection_name}' with {len(collection.get()['ids'])} documents.")
